@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MemoryCache } from "@/core/cache";
 import { landmassOf } from "@/core/location/geo";
 import { HubCatalog, reachableHubs, selectHubs } from "@/core/location/hubs";
 import { LocationNotFoundError, LocationResolver, NominatimGeocoder } from "@/core/location/resolver";
@@ -27,10 +28,27 @@ describe("LocationResolver", () => {
       calls.push(init);
       return new Response(JSON.stringify([{ lat: "43.7", lon: "7.26", display_name: "Nice, France", name: "Nice", category: "place", type: "city", osm_type: "relation", osm_id: 1, address: { country_code: "fr" } }]));
     }) as unknown as typeof fetch;
-    const g = new NominatimGeocoder("TravelAgentAI/0.1 (test@example.org)", fakeFetch);
+    const cache = new MemoryCache();
+    const g = new NominatimGeocoder({ userAgent: "TravelAgentAI/0.2 (test@example.org)", fetchImpl: fakeFetch, cache });
     const p = await g.geocode("Nice");
     expect(p?.timezone).toBe("Europe/Paris");
     expect((calls[0]!.headers as Record<string, string>)["User-Agent"]).toMatch(/TravelAgentAI/);
+    // Deuxième instance, même cache : aucun nouvel appel réseau.
+    const g2 = new NominatimGeocoder({ userAgent: "x", fetchImpl: fakeFetch, cache });
+    expect((await g2.geocode("Nice"))?.name).toBe("Nice");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("Nominatim : au plus 1 requête par seconde (file globale)", async () => {
+    const times: number[] = [];
+    const fakeFetch = (async () => {
+      times.push(Date.now());
+      return new Response("[]");
+    }) as unknown as typeof fetch;
+    const g = new NominatimGeocoder({ userAgent: "t", fetchImpl: fakeFetch });
+    await Promise.all([g.geocode("Lieu A"), g.geocode("Lieu B")]);
+    expect(times).toHaveLength(2);
+    expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(1000);
   });
 });
 

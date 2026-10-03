@@ -6,7 +6,7 @@ import { t } from "@/i18n";
 import type { TransportProvider } from "@/core/providers/types";
 import { HubCatalog } from "@/core/location/hubs";
 import { LocationResolver } from "@/core/location/resolver";
-import { createRegistry, phase1Providers } from "@/core/search/default-providers";
+import { createRegistry, offlineProviders } from "@/core/search/default-providers";
 import { mockDeps, params, silentLogger } from "./helpers";
 
 /** Exemple de test réel du cahier des charges (§36), sur providers fictifs. */
@@ -106,7 +106,7 @@ describe("résultats incomplets et pannes", () => {
   it("un provider en panne est signalé ⚠ et n'empêche pas les résultats des autres", async () => {
     const catalog = new HubCatalog();
     const broken: TransportProvider = {
-      ...phase1Providers(catalog)[0]!,
+      ...offlineProviders(catalog)[0]!,
       id: "broken-flights",
       displayName: "Vols (en panne)",
       availability: () => ({ enabled: true }),
@@ -122,7 +122,7 @@ describe("résultats incomplets et pannes", () => {
       accessMethod: "API",
       isMock: false,
     };
-    const deps = mockDeps({ registry: createRegistry([...phase1Providers(catalog), broken]), resolver: new LocationResolver(catalog), catalog, logger: silentLogger, disableAlternatives: true });
+    const deps = mockDeps({ registry: createRegistry([...offlineProviders(catalog), broken]), resolver: new LocationResolver(catalog), catalog, logger: silentLogger, disableAlternatives: true });
     const r = await runSearch(skemaManacor, deps);
     expect(r.journeys.length).toBeGreaterThan(0);
     expect(r.trace.providers.find((p) => p.providerId === "broken-flights")!.status).toBe("error");

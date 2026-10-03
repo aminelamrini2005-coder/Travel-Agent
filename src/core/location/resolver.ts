@@ -1,3 +1,4 @@
+import type { Cache } from "../cache";
 import type { LocationQuery, Place, PlaceKind } from "../types";
 import { normalizeText, timezoneForCountry } from "./geo";
 import type { HubCatalog } from "./hubs";
@@ -62,29 +63,66 @@ export class LocationResolver {
   }
 }
 
+export interface NominatimOptions {
+  /** User-Agent identifiant l'application (obligatoire selon la politique d'usage). */
+  userAgent: string;
+  /** E-mail de contact (recommandé par la politique pour un usage régulier). */
+  email?: string;
+  cache?: Cache;
+  fetchImpl?: typeof fetch;
+  baseUrl?: string;
+  /** Codes pays autorisés (réduit les ambiguïtés), ex. "fr,es,it,mc". */
+  countryCodes?: string;
+}
+
 /**
- * Géocodeur Nominatim (OpenStreetMap). Politique d'usage : User-Agent identifiable, ≤ 1 requête/s, cache obligatoire.
- * https://operations.osmfoundation.org/policies/nominatim/
+ * Géocodeur Nominatim (OpenStreetMap), conforme à la politique d'usage
+ * https://operations.osmfoundation.org/policies/nominatim/ :
+ *  - au plus 1 requête par seconde, toutes recherches confondues (file d'attente globale) ;
+ *  - User-Agent identifiant l'application (+ e-mail de contact si fourni) ;
+ *  - résultats mis en cache 30 jours (y compris les absences de résultat), pas d'autocomplétion ;
+ *  - attribution « © contributeurs OpenStreetMap » affichée dans l'interface.
+ * Utilisé uniquement quand le catalogue local ne connaît pas le lieu.
  */
 export class NominatimGeocoder implements Geocoder {
   readonly id = "nominatim";
-  private last = 0;
+  static readonly attribution = "© contributeurs OpenStreetMap (ODbL) — géocodage Nominatim";
+  /** File globale partagée par toutes les instances : garantit ≤ 1 req/s dans le processus. */
+  private static queue: Promise<void> = Promise.resolve();
+  private static last = 0;
   private readonly memo = new Map<string, Place | null>();
 
-  constructor(
-    private readonly userAgent: string,
-    private readonly fetchImpl: typeof fetch = fetch,
-    private readonly baseUrl = "https://nominatim.openstreetmap.org",
-  ) {}
+  constructor(private readonly o: NominatimOptions) {}
+
+  private static async throttle(): Promise<void> {
+    const turn = NominatimGeocoder.queue.then(async () => {
+      const wait = NominatimGeocoder.last + 1100 - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      NominatimGeocoder.last = Date.now();
+    });
+    NominatimGeocoder.queue = turn.catch(() => {});
+    return turn;
+  }
 
   async geocode(text: string): Promise<Place | null> {
     const key = normalizeText(text);
+    if (!key) return null;
     if (this.memo.has(key)) return this.memo.get(key)!;
-    const wait = this.last + 1100 - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    this.last = Date.now();
-    const url = `${this.baseUrl}/search?format=jsonv2&addressdetails=1&limit=1&q=${encodeURIComponent(text)}`;
-    const res = await this.fetchImpl(url, { headers: { "User-Agent": this.userAgent, "Accept-Language": "fr" } });
+    const cacheKey = `nominatim:${key}`;
+    const cached = await this.o.cache?.get<{ place: Place | null }>(cacheKey);
+    if (cached) {
+      this.memo.set(key, cached.place);
+      return cached.place;
+    }
+    await NominatimGeocoder.throttle();
+    const params = new URLSearchParams({ format: "jsonv2", addressdetails: "1", limit: "1", q: text, "accept-language": "fr" });
+    if (this.o.email) params.set("email", this.o.email);
+    if (this.o.countryCodes) params.set("countrycodes", this.o.countryCodes);
+    const res = await (this.o.fetchImpl ?? fetch)(`${this.o.baseUrl ?? "https://nominatim.openstreetmap.org"}/search?${params}`, {
+      headers: { "User-Agent": this.o.userAgent },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.status === 429 || res.status === 403) throw new Error(`Nominatim HTTP ${res.status} (limite d'usage) — aucune nouvelle tentative`);
     if (!res.ok) throw new Error(`Nominatim HTTP ${res.status}`);
     const data = (await res.json()) as {
       lat: string;
@@ -98,27 +136,23 @@ export class NominatimGeocoder implements Geocoder {
       address?: { country_code?: string };
     }[];
     const r = data[0];
-    if (!r) {
-      this.memo.set(key, null);
-      return null;
-    }
-    const cc = r.address?.country_code?.toUpperCase();
+    let place: Place | null = null;
+    const cc = r?.address?.country_code?.toUpperCase();
     const tz = timezoneForCountry(cc);
-    if (!tz) {
-      // Fuseau inconnu : on refuse plutôt que de supposer un fuseau faux.
-      this.memo.set(key, null);
-      return null;
+    // Fuseau inconnu : on refuse plutôt que de supposer un fuseau faux.
+    if (r && tz) {
+      place = {
+        id: `osm:${r.osm_type ?? "x"}/${r.osm_id ?? key}`,
+        name: r.name || r.display_name.split(",")[0]!,
+        kind: mapOsmKind(r.category, r.type),
+        lat: Number(r.lat),
+        lon: Number(r.lon),
+        timezone: tz,
+        countryCode: cc,
+      };
     }
-    const place: Place = {
-      id: `osm:${r.osm_type ?? "x"}/${r.osm_id ?? key}`,
-      name: r.name || r.display_name.split(",")[0]!,
-      kind: mapOsmKind(r.category, r.type),
-      lat: Number(r.lat),
-      lon: Number(r.lon),
-      timezone: tz,
-      countryCode: cc,
-    };
     this.memo.set(key, place);
+    await this.o.cache?.set(cacheKey, { place }, 30 * 86400);
     return place;
   }
 }

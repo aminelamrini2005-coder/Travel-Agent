@@ -9,6 +9,7 @@ import { runAlternativeEngine } from "../alternatives/alternative-engine";
 import { applyPatch } from "../conversation/apply-patch";
 import { DEFAULT_ENGINE_LIMITS, runLabelSearch, type EngineLimits } from "../engine/label-search";
 import { planQueries } from "../engine/query-planner";
+import { walkLinks } from "../engine/walk-links";
 import { DEFAULT_HUB_SELECTION, selectHubs, stripHub, type HubCatalog, type HubSelectionConfig } from "../location/hubs";
 import type { LocationResolver } from "../location/resolver";
 import type { ProviderRegistry } from "../providers/registry";
@@ -40,6 +41,7 @@ interface CoreRun {
   journeys: Journey[];
   segments: TransportSegment[];
   queries: QueryTraceEntry[];
+  suppressed: Map<string, number>;
   providerCalls: number;
   trunkPairs: { from: Place; to: Place }[];
   modes: SearchParams["excludedModes"];
@@ -95,21 +97,25 @@ export async function runSearch(params: SearchParams, deps: SearchDeps): Promise
     const windowEnd = tb.latest ? addMinutesIso(tb.latest, WINDOW_EXTENSION_MIN) : addMinutesIso(tb.earliest, DEFAULT_HORIZON_MIN);
     const plan = planQueries({ origin, destination, originHubs, destinationHubs: destHubs, windowStart: tb.earliest, windowEnd, params: p });
     const exec = await deps.registry.execute(plan.queries, { phase, logger: deps.logger, now, callBudget });
-    const engine = runLabelSearch(exec.segments, engineConstraints(p, origin, destination), limits);
+    // Liaisons piétonnes entre les arrêts réels renvoyés par les sources et les nœuds du plan.
+    const planNodes = [origin, destination, ...originHubs, ...destHubs];
+    const links = walkLinks(exec.segments, planNodes, { windowStart: tb.earliest, currency: p.currency, checkedAt: now().toISOString() });
+    const segments = [...exec.segments, ...links];
+    const engine = runLabelSearch(segments, engineConstraints(p, origin, destination), limits);
     trace.labelsExplored += engine.labelsExplored;
     trace.engineDurationMs += engine.durationMs;
     if (phase === "primary") {
       trace.addRejections(engine.rejectionCounts, engine.rejectionSamples);
       trace.segmentsCollected = exec.segments.length;
     }
-    return { journeys: engine.journeys, segments: exec.segments, queries: exec.queries, providerCalls: exec.providerCalls, trunkPairs: plan.trunkPairs, modes: plan.modes };
+    return { journeys: engine.journeys, segments, queries: exec.queries, suppressed: exec.suppressedMock, providerCalls: exec.providerCalls, trunkPairs: plan.trunkPairs, modes: plan.modes };
   };
 
   // --- Recherche principale ---
   const primaryOriginHubs = originSel.primary.map((c) => stripHub(c.hub));
   const primaryDestHubs = destSel.primary.map((c) => stripHub(c.hub));
   const primary = await core(params, primaryOriginHubs, primaryDestHubs, "primary");
-  trace.addQueries(primary.queries);
+  trace.addQueries(primary.queries, primary.suppressed);
   recordPatterns(trace, origin, destination, primary.trunkPairs, primary.queries);
 
   const ranking = rankJourneys(primary.journeys, params.objective, params.currency, weights, params.valueOfTimePerHour);
@@ -133,7 +139,7 @@ export async function runSearch(params: SearchParams, deps: SearchDeps): Promise
       const extraD = (v.extraDestinationHubIds ?? []).map((id) => deps.catalog.getHub(id)).filter((h) => !!h).map(stripHub);
       extraO.concat(extraD).forEach((h) => usedAltHubs.add(h.id));
       const r = await core(patched, [...primaryOriginHubs, ...extraO], [...primaryDestHubs, ...extraD], phase);
-      trace.addQueries(r.queries);
+      trace.addQueries(r.queries, r.suppressed);
       recordPatterns(trace, origin, destination, r.trunkPairs, r.queries);
       return { journeys: r.journeys, providerCalls: r.providerCalls };
     };
@@ -195,7 +201,7 @@ export async function runSearch(params: SearchParams, deps: SearchDeps): Promise
       earliestDepartureUtc: earliest,
       latestArrivalUtc: latest,
       hubs,
-      providers: trace.providerEntries(providers, primary.modes),
+      providers: trace.providerEntries(providers, primary.modes, deps.registry.policy),
       declaredSources: trace.declaredEntries(providers, primary.modes),
       queries: trace.queries,
       routePatternsTested: [...trace.routePatterns].slice(0, 40),

@@ -31,6 +31,15 @@ export interface ProviderTraceEntry {
   errors: string[];
   /** Raison factuelle (skipped / disabled). */
   reason?: string;
+  /** Résultats avec un prix fourni par la source. */
+  pricedResults: number;
+  /** Fraîcheur des données (la plus ancienne vue). */
+  dataAsOf?: string;
+  /** Temps de réponse moyen (ms) des appels réels. */
+  avgResponseMs: number;
+  /** Requêtes où ce provider fictif a été écarté car une donnée réelle existait. */
+  suppressedByRealData: number;
+  attribution?: string;
 }
 
 export interface QueryTraceEntry {
@@ -45,6 +54,9 @@ export interface QueryTraceEntry {
   windowEnd: string;
   status: "success" | "error" | "timeout" | "blocked" | "cache_hit" | "skipped_budget";
   resultCount: number;
+  /** Résultats avec un prix fourni par la source. */
+  pricedCount: number;
+  dataAsOf?: string;
   durationMs: number;
   error?: string;
   /** Recherche principale ou variante d'alternative. */
@@ -171,6 +183,8 @@ export interface Alternative {
   journey: Journey;
   referenceJourneyId: string;
   deltaPrice: Money;
+  /** false si l'un des deux trajets a un prix incomplet : l'écart de prix n'est alors pas affiché. */
+  priceDeltaKnown: boolean;
   deltaArrivalMinutes: number;
   deltaDurationMinutes: number;
   deltaTransfers: number;

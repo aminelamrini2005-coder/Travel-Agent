@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Explanation, Journey } from "@/core/types";
 import { t } from "@/i18n";
+import { DataQualityBar, SegmentBadge } from "./DataBadges";
 import { JourneyTimeline } from "./JourneyTimeline";
 import { MODE_ICON, depTime, formatDuration, journeyArrival, journeyPrice, modeLabel } from "./format";
 
@@ -14,6 +15,7 @@ export function PlaceChain({ journey }: { journey: Journey }) {
           <div className="pl-2 text-xs text-zinc-500">
             ↓ {MODE_ICON[s.mode]} {modeLabel(s.mode)}
             {s.operator ? ` · ${s.operator}` : ""}
+            {s.mode !== "walk" && <SegmentBadge segment={s} />}
           </div>
           <div className="font-medium">{s.destination.name}</div>
         </li>
@@ -53,7 +55,7 @@ export function JourneyCard({
           <div className="text-xs text-zinc-500">{journey.transfers === 0 ? t("result.direct") : t("result.transfers", { n: journey.transfers })}</div>
         </div>
       </div>
-      {journey.containsMockData && <span className="mt-1 inline-block rounded bg-amber-200 px-1.5 text-xs font-semibold text-amber-900">{t("mock.badge")}</span>}
+      <DataQualityBar q={journey.dataQuality} />
       {!compact && <PlaceChain journey={journey} />}
       {compact && (
         <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">

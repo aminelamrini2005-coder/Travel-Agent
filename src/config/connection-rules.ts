@@ -17,6 +17,8 @@ export interface ConnectionRulesConfig {
   minimumToFlight: number;
   /** Train → train sur un même billet (correspondance garantie). */
   sameTicketRail: number;
+  /** Vol → vol sur un même billet (correspondance protégée, ordre de grandeur d'un temps minimum de correspondance). */
+  sameTicketFlight: number;
   /** Changement de lieu (gare ≠ arrêt) : ajouté si les deux segments ne partagent pas le même lieu. Géré par le graphe (segment de transfert). */
 }
 
@@ -46,4 +48,5 @@ export const DEFAULT_CONNECTION_RULES: ConnectionRulesConfig = {
   backpackReductionToFlight: 25,
   minimumToFlight: 60,
   sameTicketRail: 10,
+  sameTicketFlight: 50,
 };

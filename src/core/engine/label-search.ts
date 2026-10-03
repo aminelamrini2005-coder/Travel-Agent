@@ -362,9 +362,11 @@ export function runLabelSearch(
       extend(l, s, d, toEpochMs(s.arrivalTime));
     }
 
-    // Arêtes flexibles (pas de chaînage flexible → flexible).
-    if (!l.seg || !l.seg.flexibleDeparture) {
+    // Arêtes flexibles : pas deux segments flexibles consécutifs du même mode (marche → marche),
+    // mais taxi → marche jusqu'à l'arrêt est permis.
+    {
       for (const s of flexible.get(l.node) ?? []) {
+        if (l.seg?.flexibleDeparture && l.seg.mode === s.mode) continue;
         if (visited(l, s.destination.id)) continue;
         const req = requiredConnection(l.seg, s, c.connection).minutes * MINUTE_MS;
         const d = l.time + req;

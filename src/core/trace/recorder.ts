@@ -20,6 +20,7 @@ export class TraceRecorder {
   readonly hubs: HubConsideration[] = [];
   readonly alternativeSearches: AlternativeSearchTrace[] = [];
   readonly routePatterns = new Set<string>();
+  readonly suppressedMock = new Map<string, number>();
   rejectionCounts: Partial<Record<RejectionReason, number>> = {};
   rejectionSamples: RejectionSample[] = [];
   segmentsCollected = 0;
@@ -27,8 +28,9 @@ export class TraceRecorder {
   journeysGenerated = 0;
   engineDurationMs = 0;
 
-  addQueries(q: QueryTraceEntry[]) {
+  addQueries(q: QueryTraceEntry[], suppressed?: Map<string, number>) {
     this.queries.push(...q);
+    for (const [k, v] of suppressed ?? []) this.suppressedMock.set(k, (this.suppressedMock.get(k) ?? 0) + v);
   }
 
   addRejections(counts: Partial<Record<RejectionReason, number>>, samples: RejectionSample[]) {
@@ -39,10 +41,12 @@ export class TraceRecorder {
   }
 
   /** Agrège l'état de chaque provider à partir des requêtes réellement effectuées. */
-  providerEntries(providers: readonly TransportProvider[], searchedModes: TransportMode[]): ProviderTraceEntry[] {
+  providerEntries(providers: readonly TransportProvider[], searchedModes: TransportMode[], mockPolicy: "fallback" | "off" | "all" = "fallback"): ProviderTraceEntry[] {
     return providers.map((p) => {
       const qs = this.queries.filter((q) => q.providerId === p.id);
-      const availability = p.availability();
+      const availability = p.isMock && mockPolicy === "off" ? { enabled: false, reasonKey: "provider.disabled.mockOff" } : p.availability();
+      const live = qs.filter((q) => q.status === "success" || q.status === "error" || q.status === "timeout" || q.status === "blocked");
+      const asOf = qs.map((q) => q.dataAsOf).filter((x): x is string => !!x).sort()[0];
       const base = {
         providerId: p.id,
         displayName: p.displayName,
@@ -54,11 +58,21 @@ export class TraceRecorder {
         resultCount: qs.reduce((a, q) => a + q.resultCount, 0),
         totalDurationMs: qs.reduce((a, q) => a + q.durationMs, 0),
         errors: [...new Set(qs.filter((q) => q.error).map((q) => q.error!))].slice(0, 5),
+        pricedResults: qs.reduce((a, q) => a + q.pricedCount, 0),
+        dataAsOf: asOf,
+        avgResponseMs: live.length ? Math.round(live.reduce((a, q) => a + q.durationMs, 0) / live.length) : 0,
+        suppressedByRealData: this.suppressedMock.get(p.id) ?? 0,
+        attribution: p.attribution,
       };
       if (!availability.enabled) return { ...base, status: "disabled" as const, reason: availability.reasonKey };
       if (qs.length === 0) {
         const modeRelevant = p.modes.some((m) => searchedModes.includes(m));
-        return { ...base, status: "skipped" as const, reason: modeRelevant ? "provider.skipped.noSupportedPair" : "provider.skipped.modeExcluded" };
+        const reason = !modeRelevant
+          ? "provider.skipped.modeExcluded"
+          : base.suppressedByRealData > 0
+            ? "provider.skipped.realDataPreferred"
+            : "provider.skipped.noSupportedPair";
+        return { ...base, status: "skipped" as const, reason };
       }
       const has = (s: QueryTraceEntry["status"]) => qs.some((q) => q.status === s);
       const status = has("success") || has("cache_hit") ? "success" : has("blocked") ? "blocked" : has("timeout") && !has("error") ? "timeout" : has("error") ? "error" : "skipped";
@@ -68,8 +82,9 @@ export class TraceRecorder {
 
   /** Plateformes connues mais non interrogées, pertinentes pour les modes recherchés. */
   declaredEntries(providers: readonly TransportProvider[], searchedModes: TransportMode[]): DeclaredSourceTraceEntry[] {
-    const enabledIds = new Set(providers.filter((p) => p.availability().enabled).map((p) => p.id));
-    return DECLARED_SOURCES.filter((s) => !(s.plannedProviderId && enabledIds.has(s.plannedProviderId))).map((s) => ({
+    // Une plateforme dont l'adapter existe (actif ou désactivé) apparaît déjà dans la liste des providers.
+    const knownIds = new Set(providers.map((p) => p.id));
+    return DECLARED_SOURCES.filter((s) => !(s.plannedProviderId && knownIds.has(s.plannedProviderId))).map((s) => ({
       id: s.id,
       name: s.name,
       modes: s.modes,

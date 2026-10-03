@@ -181,8 +181,10 @@ export function scoreAgainstReference(
   w: RankingWeights = DEFAULT_RANKING_WEIGHTS,
 ): ScoredCandidate | null {
   if (!ref) return { journey: j, score: 1000 - bestScore(j, w, vot), saving: 0, timeGain: 0, transfersSaved: 0 };
-  if (j.unknownPriceSegments > ref.unknownPriceSegments) return null;
-  const saving = ref.totalPrice.amountMinor - j.totalPrice.amountMinor;
+  // Prix incomplets d'un côté ou de l'autre : aucune économie n'est calculable, seuls l'horaire
+  // et les correspondances comptent (jamais de comparaison de totaux partiels).
+  const comparable = j.unknownPriceSegments === 0 && ref.unknownPriceSegments === 0;
+  const saving = comparable ? ref.totalPrice.amountMinor - j.totalPrice.amountMinor : 0;
   const timeGain = Math.round((toEpochMs(ref.arrivalTime) - toEpochMs(j.arrivalTime)) / 60000);
   const transfersSaved = ref.transfers - j.transfers;
   const significantSaving = saving >= Math.max(th.minSavingEur * 100, th.minSavingRatio * ref.totalPrice.amountMinor);
@@ -201,6 +203,11 @@ function explanation(v: SearchVariant, c: ScoredCandidate, ctx: AlternativeConte
     params.shift = Math.max(5, Math.round((toEpochMs(ctx.earliestDepartureUtc) - toEpochMs(c.journey.departureTime)) / 300000) * 5);
   }
   if (!ctx.reference) return { key: "alt.found", params };
+  const comparable = c.journey.unknownPriceSegments === 0 && ctx.reference.unknownPriceSegments === 0;
+  if (!comparable) {
+    if (c.timeGain > 0) return { key: "alt.fasterPriceUnknown", params: { ...params, earlier: c.timeGain } };
+    return { key: "alt.fewerPriceUnknown", params: { ...params, transfersSaved: c.transfersSaved } };
+  }
   if (c.saving > 0 && c.timeGain >= 5) return { key: "alt.better", params: { ...params, saving: c.saving, earlier: c.timeGain } };
   if (c.saving > 0 && c.timeGain > -5) return { key: "alt.cheaperSameTime", params: { ...params, saving: c.saving } };
   if (c.saving > 0) return { key: "alt.save", params: { ...params, saving: c.saving, later: -c.timeGain } };
@@ -282,6 +289,7 @@ export async function runAlternativeEngine(
       journey: c.journey,
       referenceJourneyId: ref?.id ?? "",
       deltaPrice: { amountMinor: ref ? c.journey.totalPrice.amountMinor - ref.totalPrice.amountMinor : 0, currency: ctx.params.currency },
+      priceDeltaKnown: !!ref && c.journey.unknownPriceSegments === 0 && ref.unknownPriceSegments === 0,
       deltaArrivalMinutes: ref ? Math.round((toEpochMs(c.journey.arrivalTime) - toEpochMs(ref.arrivalTime)) / 60000) : 0,
       deltaDurationMinutes: ref ? c.journey.totalDurationMinutes - ref.totalDurationMinutes : 0,
       deltaTransfers: ref ? c.journey.transfers - ref.transfers : 0,

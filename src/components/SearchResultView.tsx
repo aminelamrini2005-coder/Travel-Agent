@@ -12,10 +12,10 @@ const PROFILE_TITLE: Record<RankingProfile, string> = {
   comfort: "profile.comfort",
 };
 
-export function MockBanner() {
+export function MockBanner({ mixed }: { mixed: boolean }) {
   return (
     <div role="alert" className="rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
-      <strong>⚠️ {t("mock.banner.title")}</strong> — {t("mock.banner.body")}
+      <strong>⚠️ {t("mock.banner.title")}</strong> — {mixed ? t("mock.banner.mixed") : t("mock.banner.body")}
     </div>
   );
 }
@@ -35,7 +35,10 @@ export function SearchResultView({ result }: { result: SearchResult }) {
 
   return (
     <div className="space-y-4">
-      {result.containsMockData && <MockBanner />}
+      {result.containsMockData && <MockBanner mixed={[...result.journeys, ...result.alternatives.map((a) => a.journey)].some((j) => j.dataQuality.verifiedSegments > 0)} />}
+      {!result.containsMockData && result.journeys.length > 0 && (
+        <p className="rounded-xl border border-emerald-300 bg-emerald-50 p-2 text-xs text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">✓ {t("mock.banner.realOnly")}</p>
+      )}
 
       {primary && primaryJourney ? (
         <section>

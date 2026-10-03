@@ -47,3 +47,7 @@ next-env.d.ts
 # profils navigateur / secrets locaux (ne jamais committer)
 /browser-profiles/
 *.local
+
+# données GTFS téléchargées (régénérées par npm run gtfs:sync)
+/data/gtfs/raw/
+/data/gtfs/manifest.json

@@ -1,7 +1,7 @@
 import { HubCatalog } from "@/core/location/hubs";
 import { LocationResolver } from "@/core/location/resolver";
 import type { ProviderLogger } from "@/core/providers/types";
-import { createRegistry, phase1Providers } from "@/core/search/default-providers";
+import { createRegistry, offlineProviders } from "@/core/search/default-providers";
 import type { SearchDeps } from "@/core/search/run-search";
 import { SearchParamsSchema, type SearchParamsInput } from "@/core/types";
 
@@ -12,7 +12,7 @@ export function mockDeps(overrides: Partial<SearchDeps> = {}): SearchDeps {
   return {
     catalog,
     resolver: new LocationResolver(catalog),
-    registry: createRegistry(phase1Providers(catalog)),
+    registry: createRegistry(offlineProviders(catalog)),
     logger: silentLogger,
     now: () => new Date("2026-10-03T10:00:00Z"),
     ...overrides,

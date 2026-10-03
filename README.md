@@ -2,8 +2,8 @@
 
 Assistant de voyage conversationnel qui cherche le meilleur trajet **porte-à-porte** en combinant plusieurs modes de transport (avion, train, car, covoiturage, transports locaux, marche, taxi) et plusieurs sources. Il construit lui-même ses itinéraires multimodaux. Il ne se limite pas à comparer des billets A → B sur une seule plateforme.
 
-> **Statut : phase 1 terminée.** Le moteur, la conversation, l'interface et la trace fonctionnent.
-> **Aucune source de transport réelle n'est encore branchée.** Les résultats viennent de providers **fictifs** (`is_mock: true`), signalés partout dans l'interface par un bandeau « Données de démonstration » et un badge « FICTIF ».
+> **Statut : phase 2 (1re partie) terminée.** Premières **données réelles** : horaires open data **FlixBus/FlixTrain** (Europe) et **TIB Majorque** (GTFS), géocodage OpenStreetMap, taux BCE.
+> Les prix de ces sources sont **inconnus** (`UNKNOWN`) et affichés comme tels. Les modes encore sans source réelle (vols, trains SNCF, covoiturage, bus locaux de la Côte d'Azur) utilisent des providers **fictifs en repli**. Chaque segment est badgé DONNÉE RÉELLE / DÉMO / ESTIMATION, et chaque trajet affiche sa couverture en données réelles.
 
 Documents de référence :
 
@@ -19,6 +19,7 @@ Prérequis : Node.js ≥ 22. PostgreSQL et Redis sont **optionnels**.
 ```bash
 npm install                 # installe et génère le client Prisma
 cp .env.example .env        # puis compléter si besoin (aucune clé n'est obligatoire)
+npm run gtfs:sync           # télécharge les horaires open data (FlixBus, TIB) dans data/gtfs/
 npm run dev                 # http://localhost:3000
 ```
 
@@ -46,6 +47,7 @@ npm run dev
 | `npm run typecheck` | TypeScript strict (`tsc --noEmit`) |
 | `npm run check` | lint + typecheck + tests + build (à lancer avant chaque livraison) |
 | `npm run db:migrate` / `db:deploy` | Migrations Prisma (dev / prod) |
+| `npm run gtfs:sync [-- <feedId>]` | Télécharge / met à jour les flux GTFS (source officielle, sinon copie Mobility Database) |
 
 ---
 
@@ -60,15 +62,37 @@ Toutes les clés restent **côté serveur** : aucune n'est préfixée `NEXT_PUBL
 | `LLM_PROVIDER` | non | `auto` \| `anthropic` \| `openai` \| `none` |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | non | Compréhension du langage via Claude (défaut `claude-opus-5-5`) |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | non | Alternative OpenAI |
-| `USE_MOCK_PROVIDERS` | non | `true` en phase 1 |
-| `NOMINATIM_CONTACT_EMAIL` | non | Active le géocodage OpenStreetMap pour les lieux hors catalogue |
-| `ENABLE_ECB_RATES` | non | Taux de change BCE (sinon aucune conversion) |
+| `MOCK_POLICY` | non | `fallback` (défaut) : démo uniquement là où aucune donnée réelle n'existe · `off` · `all` |
+| `GTFS_DIR` | non | Dossier des flux GTFS (défaut `data/gtfs`) |
+| `SNCF_API_TOKEN` | non | Active l'adapter API SNCF (Navitia) |
+| `DUFFEL_ACCESS_TOKEN` | non | Active l'adapter Duffel (un jeton `duffel_test_` = offres fictives, affichées comme démo) |
+| `TRANSITOUS_ENABLED`, `TRANSITOUS_CONTACT` | non | Transitous, à n'activer qu'après accord avec l'équipe |
+| `NOMINATIM_ENABLED`, `NOMINATIM_CONTACT_EMAIL` | non | Géocodage OpenStreetMap (≤ 1 req/s, cache 30 j) |
+| `ENABLE_ECB_RATES` | non | Taux de change BCE (défaut `true`) |
 | `BROWSER_PROFILE_DIR` | non | Profil de navigateur **hors du dépôt** pour un futur BrowserProvider autorisé |
 | `USER_TIMEZONE`, `RATE_LIMIT_PER_MINUTE`, `LOG_LEVEL` | non | Divers |
 
 ---
 
-## Ce que fait la phase 1
+## Sources de données
+
+| Source | Méthode | Statut | Prix |
+|---|---|---|---|
+| FlixBus / FlixTrain (GTFS européen) | Open data | ✅ actif (`npm run gtfs:sync`) | inconnu |
+| TIB Majorque — bus, SFM (GTFS) | Open data | ✅ actif | inconnu |
+| OpenStreetMap Nominatim | API publique | ✅ actif (lieux hors catalogue) | — |
+| Taux BCE | Open data | ✅ actif | — |
+| API SNCF (Navitia) | API | ⏳ adapter prêt, jeton requis | tarif de référence (RANGE) ou inconnu |
+| Duffel (vols) | API | ⏳ adapter prêt, jeton requis | réel |
+| Transitous (MOTIS) | Open data | ⏳ adapter prêt, désactivé (accord à obtenir) | inconnu |
+| SNCF TER / TGV, Lignes d'Azur, Palmbus, Aix-Marseille (GTFS) | Open data | ✗ seule copie accessible périmée | — |
+| BlaBlaCar, Google Routes | API | ⏳ emplacement prévu, clé requise | — |
+| Skyscanner, Trainline, FlixBus (prix), ferries | Partenaire | ✗ accès partenaire nécessaire | — |
+| Vols, trains, cars, covoiturage, bus locaux « Démo » | Mock | repli uniquement | fictif |
+
+Pour ajouter une source : [`docs/ADDING_A_PROVIDER.md`](docs/ADDING_A_PROVIDER.md).
+
+## Ce que fait le moteur
 
 - **Conversation avec contexte** : « Marseille → Paris demain » → « seulement < 70 € » → « enlève les bus » → « finalement je peux partir 2 h plus tôt ». Chaque message produit un *patch* des paramètres précédents.
 - **Résolution des lieux** : point d'intérêt (SKEMA Sophia Antipolis), ville, gare, aéroport, coordonnées GPS. Le géocodage Nominatim est optionnel.

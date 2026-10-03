@@ -42,6 +42,8 @@ export interface TransportProvider {
   readonly accessMethod: AccessMethod;
   readonly modes: readonly TransportMode[];
   readonly isMock: boolean;
+  /** Mention de source / licence (affichée dans la trace). */
+  readonly attribution?: string;
   /** Durée de cache des résultats (s). 0 = pas de cache. */
   readonly cacheTtlSeconds: number;
   readonly timeoutMs: number;

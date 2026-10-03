@@ -20,6 +20,20 @@
 
 ---
 
+## Amendement B (validé) — phase 2, première partie : données réelles sans clé
+
+- **Règle absolue sur les prix** : jamais de prix inventé. `UNKNOWN` est affiché tel quel. `ESTIMATED` uniquement pour une méthode de calcul explicitement prévue (taxi). Deux totaux ne sont comparés (« économise X € ») que si les deux trajets sont entièrement chiffrés.
+- **Open data GTFS** (`OPEN_DATA`) : FlixBus/FlixTrain (Europe) et TIB Majorque. Source officielle d'abord ; à défaut, copie horodatée de la Mobility Database. La provenance, la date et la validité sont enregistrées dans `data/gtfs/manifest.json`. Les flux dont la seule copie disponible est périmée (SNCF, Lignes d'Azur, Palmbus, Aix-Marseille) sont déclarés « ✗ copie périmée ».
+- **Mocks en repli** (`MOCK_POLICY=fallback`) : un provider fictif n'est appelé que pour les familles de modes où aucune source réelle n'a répondu sur la paire. La trace compte les requêtes écartées.
+- **Couverture** : `Journey.dataQuality` (vérifiés / fictifs / estimés, pourcentage de données réelles, prix connus, statut `verified | partial | demo | estimated`). Un trajet avec un segment fictif n'est jamais « vérifié ».
+- **Trace** : par source, méthode, statut, nombre de résultats, résultats avec prix, fraîcheur (`dataAsOf`), temps de réponse moyen, requêtes écartées, attribution.
+- **Liaisons piétonnes** entre les arrêts réels renvoyés par les sources et les nœuds du plan (≤ 2 km, estimations `COMPUTED`).
+- **Services transverses** : Nominatim (≤ 1 req/s globale, cache 30 jours, User-Agent identifiant, mention OSM) et taux BCE activés par défaut.
+- **Adapters prêts** (activés par la seule présence du jeton) : API SNCF / Navitia, Duffel (un jeton de test est traité comme MOCK). Transitous est préparé mais désactivé tant que l'usage n'est pas convenu.
+- **Registre d'intégrations** (`src/server/integrations.ts`) : emplacements prévus pour BlaBlaCar, Google Routes, Skyscanner, Trainline, FlixBus partenaire et ferries — voir `docs/ADDING_A_PROVIDER.md`.
+
+---
+
 ## 1. Analyse du produit
 
 ### 1.1 Ce que le produit est vraiment

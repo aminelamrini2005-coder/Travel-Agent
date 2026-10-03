@@ -9,10 +9,10 @@ import {
   MockRailProvider,
   MockRideshareProvider,
 } from "../providers/mock/mock-providers";
-import { ProviderRegistry } from "../providers/registry";
+import { ProviderRegistry, type MockPolicy } from "../providers/registry";
 import type { TransportProvider } from "../providers/types";
 
-/** Providers de la phase 1 : mocks clairement identifiés + providers calculés (marche, taxi estimé). */
+/** Providers fictifs (démonstration) — utilisés en repli uniquement selon la politique MOCK_POLICY. */
 export function phase1Providers(catalog: HubCatalog): TransportProvider[] {
   return [
     new MockFlightProvider(catalog),
@@ -20,11 +20,19 @@ export function phase1Providers(catalog: HubCatalog): TransportProvider[] {
     new MockCoachProvider(catalog),
     new MockRideshareProvider(catalog),
     new MockLocalTransitProvider(catalog),
-    new WalkProvider(),
-    new TaxiEstimateProvider(),
   ];
 }
 
-export function createRegistry(providers: TransportProvider[], cache: Cache = new MemoryCache(), rates: RateSource = new NoRateSource()) {
-  return new ProviderRegistry(providers, cache, new CurrencyConverter(rates));
+/** Mocks + estimations calculées (tests et développement hors ligne). */
+export function offlineProviders(catalog: HubCatalog): TransportProvider[] {
+  return [...phase1Providers(catalog), new WalkProvider(), new TaxiEstimateProvider()];
+}
+
+export function createRegistry(
+  providers: TransportProvider[],
+  cache: Cache = new MemoryCache(),
+  rates: RateSource = new NoRateSource(),
+  mockPolicy: MockPolicy = "fallback",
+) {
+  return new ProviderRegistry(providers, cache, new CurrencyConverter(rates), mockPolicy);
 }

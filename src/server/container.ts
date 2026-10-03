@@ -3,9 +3,8 @@ import { MemoryCache, type Cache } from "@/core/cache";
 import { HubCatalog } from "@/core/location/hubs";
 import { LocationResolver, NominatimGeocoder, type Geocoder } from "@/core/location/resolver";
 import { EcbRateSource, NoRateSource } from "@/core/money";
-import { TaxiEstimateProvider, WalkProvider } from "@/core/providers/computed/computed-providers";
 import type { TransportProvider } from "@/core/providers/types";
-import { createRegistry, phase1Providers } from "@/core/search/default-providers";
+import { createRegistry } from "@/core/search/default-providers";
 import type { SearchDeps } from "@/core/search/run-search";
 import { RedisCache } from "./cache/redis-cache";
 import { MemoryStore } from "./db/memory-store";
@@ -18,6 +17,7 @@ import {
   OpenAIIntentExtractor,
   type IntentExtractor,
 } from "./llm/intent";
+import { buildIntegrations, type Integration } from "./integrations";
 import { logger } from "./logger";
 import { RateLimiter } from "./rate-limit";
 
@@ -29,6 +29,7 @@ export interface Container {
   rateLimiter: RateLimiter;
   cacheKind: "redis" | "memory";
   timezone: string;
+  integrations: Integration[];
 }
 
 let container: Container | undefined;
@@ -39,15 +40,19 @@ export function getContainer(): Container {
   const e = env();
   const catalog = new HubCatalog();
 
-  const geocoders: Geocoder[] = [];
-  if (e.NOMINATIM_CONTACT_EMAIL) geocoders.push(new NominatimGeocoder(`TravelAgentAI/0.1 (${e.NOMINATIM_CONTACT_EMAIL})`));
-
   const redis = e.REDIS_URL ? new RedisCache(e.REDIS_URL) : undefined;
   const cache: Cache = redis ?? new MemoryCache();
 
-  // Phase 1 : mocks clairement identifiés + estimations calculées. Les vraies sources s'ajouteront ici.
-  const providers: TransportProvider[] = e.USE_MOCK_PROVIDERS ? phase1Providers(catalog) : [new WalkProvider(), new TaxiEstimateProvider()];
-  const registry = createRegistry(providers, cache, e.ENABLE_ECB_RATES ? new EcbRateSource() : new NoRateSource());
+  const geocoders: Geocoder[] = [];
+  if (e.NOMINATIM_ENABLED) {
+    const ua = e.NOMINATIM_USER_AGENT ?? `TravelAgentAI/0.2 (${e.NOMINATIM_CONTACT_EMAIL ?? "https://github.com/aminelamrini2005-coder/Travel-Agent"})`;
+    geocoders.push(new NominatimGeocoder({ userAgent: ua, email: e.NOMINATIM_CONTACT_EMAIL, cache, countryCodes: "fr,es,it,mc,ch,be,de,pt,ad,gb,nl,lu,at" }));
+  }
+
+  const integrations = buildIntegrations(e, catalog);
+  const providers: TransportProvider[] = integrations.flatMap((i) => i.providers);
+  const mockPolicy = e.USE_MOCK_PROVIDERS ? e.MOCK_POLICY : "off";
+  const registry = createRegistry(providers, cache, e.ENABLE_ECB_RATES ? new EcbRateSource() : new NoRateSource(), mockPolicy);
 
   let primary: IntentExtractor | null = null;
   const wantAnthropic = e.LLM_PROVIDER === "anthropic" || (e.LLM_PROVIDER === "auto" && !!e.ANTHROPIC_API_KEY);
@@ -66,9 +71,17 @@ export function getContainer(): Container {
     rateLimiter: new RateLimiter(e.RATE_LIMIT_PER_MINUTE, redis),
     cacheKind: redis ? "redis" : "memory",
     timezone: e.USER_TIMEZONE,
+    integrations,
   };
   logger.info(
-    { event: "container.ready", store: container.store.kind, cache: container.cacheKind, llm: extractor.id, providers: providers.map((p) => p.id) },
+    {
+      event: "container.ready",
+      store: container.store.kind,
+      cache: container.cacheKind,
+      llm: extractor.id,
+      mockPolicy,
+      integrations: integrations.map((i) => `${i.id}:${i.status}`),
+    },
     "container ready",
   );
   return container;

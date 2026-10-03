@@ -20,6 +20,26 @@ export interface Connection {
   notes: string[];
 }
 
+/**
+ * Couverture en données réelles d'un trajet, calculée de façon déterministe par le backend.
+ * Les segments de marche ne sont pas comptés (ce sont des estimations triviales).
+ */
+export interface DataQuality {
+  /** Segments issus d'une source réelle (API, open data, navigateur), hors marche. */
+  verifiedSegments: number;
+  /** Segments fictifs (providers de démonstration). */
+  mockSegments: number;
+  /** Segments estimés par calcul (taxi…). */
+  estimatedSegments: number;
+  /** Total compté = vérifiés + fictifs + estimés. */
+  countedSegments: number;
+  /** round(100 × vérifiés / comptés). */
+  realCoveragePercent: number;
+  /** Segments dont le prix provient d'une source (REAL ou RANGE). */
+  pricedSegments: number;
+  status: "verified" | "partial" | "demo" | "estimated";
+}
+
 export interface Journey {
   id: string;
   segments: TransportSegment[];
@@ -44,6 +64,7 @@ export interface Journey {
   riskLevel: RiskLevel;
   bookingLinks: { segmentId: string; url: string; provider: string }[];
   containsMockData: boolean;
+  dataQuality: DataQuality;
   modes: TransportMode[];
   /** Ensemble des providers et méthodes d'accès ayant fourni les segments. */
   sources: { provider: string; accessMethod: TransportSegment["accessMethod"] }[];

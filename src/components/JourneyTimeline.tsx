@@ -1,6 +1,7 @@
 "use client";
 import type { Journey } from "@/core/types";
 import { t } from "@/i18n";
+import { PriceConfidenceLabel, SegmentBadge } from "./DataBadges";
 import { MODE_ICON, arrTime, depTime, formatDuration, formatMoney, modeLabel } from "./format";
 
 const RISK_COLOR = { low: "text-emerald-700 dark:text-emerald-400", medium: "text-amber-700 dark:text-amber-400", high: "text-red-700 dark:text-red-400" };
@@ -37,27 +38,37 @@ export function JourneyTimeline({ journey }: { journey: Journey }) {
                     {MODE_ICON[s.mode]} {modeLabel(s.mode)}
                     {s.operator ? ` · ${s.operator}` : ""}
                     {s.serviceNumber ? ` ${s.serviceNumber}` : ""}
+                    <SegmentBadge segment={s} />
                   </span>
-                  <span className="font-semibold">
-                    {s.price ? formatMoney(s.price) : t("price.UNKNOWN")}
-                    {s.priceRange ? ` – ${formatMoney(s.priceRange.max)}` : ""}
+                  <span className="text-right font-semibold">
+                    {s.price && s.priceConfidence !== "UNKNOWN" ? formatMoney(s.price) : "—"}
+                    {s.priceRange && s.priceRange.max.amountMinor !== s.priceRange.min.amountMinor ? ` – ${formatMoney(s.priceRange.max)}` : ""}
+                    <div>
+                      <PriceConfidenceLabel segment={s} />
+                    </div>
                   </span>
                 </div>
                 <div className="mt-1 text-xs text-zinc-500">
-                  {formatDuration(s.durationMinutes)} · {t(`price.${s.priceConfidence}`)} · {t(`access.${s.accessMethod}`)} · {s.realtime ? t("result.realtime") : t("result.notRealtime")} ·{" "}
+                  {formatDuration(s.durationMinutes)} · {t(`access.${s.accessMethod}`)} · {s.provider} · {s.realtime ? t("result.realtime") : t("result.notRealtime")} ·{" "}
                   {t("result.checkedAt", { time: new Date(s.checkedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) })}
-                  {s.isMock && <span className="ml-1 rounded bg-amber-200 px-1 font-semibold text-amber-900">{t("mock.badge")}</span>}
+                  {s.dataAsOf && s.dataAsOf !== s.checkedAt ? ` · ${t("result.dataAsOf", { date: new Date(s.dataAsOf).toLocaleDateString("fr-FR") })}` : ""}
                 </div>
+                {s.attribution && <div className="text-[11px] text-zinc-400">{s.attribution}</div>}
                 {s.notes?.filter((n) => n !== "segment.note.mock").map((n) => (
                   <div key={n} className="text-xs text-zinc-500">• {t(n)}</div>
                 ))}
-                <div className="mt-1 text-xs">
+                <div className="mt-1 flex gap-3 text-xs">
                   {s.bookingUrl ? (
                     <a className="text-blue-700 underline dark:text-blue-400" href={s.bookingUrl} target="_blank" rel="noopener noreferrer">
-                      {t("result.booking")} ↗
+                      {t("result.officialSite")}
                     </a>
                   ) : (
-                    <span className="text-zinc-400">{t("result.noBooking")}</span>
+                    s.mode !== "walk" && <span className="text-zinc-400">{t("result.noBooking")}</span>
+                  )}
+                  {s.sourceUrl && (
+                    <a className="text-blue-700 underline dark:text-blue-400" href={s.sourceUrl} target="_blank" rel="noopener noreferrer">
+                      {t("result.sourceLink")}
+                    </a>
                   )}
                 </div>
               </div>
@@ -75,7 +86,7 @@ export function JourneyTimeline({ journey }: { journey: Journey }) {
         <dd className="text-right font-semibold">
           {formatMoney(journey.totalPrice)}
           {journey.totalPriceMax ? ` – ${formatMoney(journey.totalPriceMax)}` : ""}
-          {journey.unknownPriceSegments > 0 && <div className="text-xs font-normal text-zinc-500">{t("result.price.unknownPart", { n: journey.unknownPriceSegments })}</div>}
+          {journey.unknownPriceSegments > 0 && <div className="text-xs font-normal text-zinc-500">{t("result.priceTotalPartial", { n: journey.unknownPriceSegments })}</div>}
         </dd>
         <dt className="text-zinc-500">{t("result.duration")}</dt>
         <dd className="text-right">{formatDuration(journey.totalDurationMinutes)}</dd>

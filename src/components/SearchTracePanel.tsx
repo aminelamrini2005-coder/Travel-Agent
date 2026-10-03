@@ -82,17 +82,42 @@ export function SearchTracePanel({ result }: { result: SearchResult }) {
       </dl>
 
       <h4 className="mt-3 font-semibold">{t("trace.sources")}</h4>
-      <ul className="mt-1 space-y-0.5">
-        {tr.providers.map((pr) => (
-          <li key={pr.providerId}>
-            {t(`trace.status.${pr.status}`)} — {pr.displayName}{" "}
-            <span className="text-xs text-zinc-500">
-              [{t(`access.${pr.accessMethod}`)}] {pr.status === "success" || pr.status === "error" || pr.status === "timeout" ? t("trace.calls", { calls: pr.calls, results: pr.resultCount }) : pr.reason ? t(pr.reason) : ""}
-              {pr.cacheHits > 0 ? ` · ${t("trace.cacheHits", { n: pr.cacheHits })}` : ""}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <div className="mt-1 overflow-x-auto">
+        <table className="w-full min-w-[560px] text-xs">
+          <thead className="text-left text-zinc-500">
+            <tr>
+              <th className="py-1 pr-2">{t("trace.col.source")}</th>
+              <th className="pr-2">{t("trace.col.method")}</th>
+              <th className="pr-2">{t("trace.col.status")}</th>
+              <th className="pr-2 text-right">{t("trace.col.results")}</th>
+              <th className="pr-2 text-right">{t("trace.col.priced")}</th>
+              <th className="pr-2">{t("trace.col.freshness")}</th>
+              <th className="text-right">{t("trace.col.time")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tr.providers.map((pr) => (
+              <tr key={pr.providerId} className="border-t border-zinc-100 align-top dark:border-zinc-900">
+                <td className="py-1 pr-2">
+                  {pr.displayName}
+                  {pr.isMock && <span className="ml-1 rounded bg-amber-200 px-1 text-[10px] font-bold text-amber-950">{t("badge.MOCK")}</span>}
+                  {pr.suppressedByRealData > 0 && <div className="text-[11px] text-zinc-500">{t("trace.suppressed", { n: pr.suppressedByRealData })}</div>}
+                  {pr.errors.length > 0 && <div className="text-[11px] text-red-700">{pr.errors[0]}</div>}
+                </td>
+                <td className="pr-2">{t(`access.${pr.accessMethod}`)}</td>
+                <td className="pr-2">
+                  {t(`trace.status.${pr.status}`)}
+                  {pr.reason && <div className="text-[11px] text-zinc-500">{t(pr.reason)}</div>}
+                </td>
+                <td className="pr-2 text-right">{pr.status === "success" || pr.calls > 0 ? pr.resultCount : "—"}</td>
+                <td className="pr-2 text-right">{pr.status === "success" ? pr.pricedResults : "—"}</td>
+                <td className="pr-2">{pr.dataAsOf ? new Date(pr.dataAsOf).toLocaleDateString("fr-FR") : "—"}</td>
+                <td className="text-right">{pr.calls > 0 ? `${pr.avgResponseMs} ms` : pr.cacheHits > 0 ? "cache" : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <h4 className="mt-3 font-semibold">{t("trace.notSearched")}</h4>
       <ul className="mt-1 space-y-0.5">
         {tr.declaredSources
@@ -132,6 +157,16 @@ export function SearchTracePanel({ result }: { result: SearchResult }) {
         </>
       )}
 
+      {tr.providers.some((p) => p.attribution && p.status === "success") && (
+        <ul className="mt-3 space-y-0.5 text-[11px] text-zinc-500">
+          {tr.providers
+            .filter((p) => p.attribution && p.status === "success")
+            .map((p) => (
+              <li key={p.providerId}>{p.attribution}</li>
+            ))}
+          {tr.resolvedOrigin.id.startsWith("osm:") || tr.resolvedDestination.id.startsWith("osm:") ? <li>{t("osm.attribution")}</li> : null}
+        </ul>
+      )}
       <p className="mt-3 text-xs text-zinc-500">
         {t("trace.lastChecked")} : {new Date(tr.completedAt).toLocaleString("fr-FR")} ·{" "}
         {t("trace.stats", { queries: tr.queries.length, segments: tr.segmentsCollected, labels: tr.labelsExplored, ms: tr.totalDurationMs })}
@@ -180,6 +215,8 @@ export function SearchTracePanel({ result }: { result: SearchResult }) {
                     <th className="p-1 text-left">Liaison</th>
                     <th className="p-1">Statut</th>
                     <th className="p-1">Rés.</th>
+                    <th className="p-1">Prix</th>
+                    <th className="p-1">ms</th>
                     <th className="p-1">Phase</th>
                   </tr>
                 </thead>
@@ -192,6 +229,8 @@ export function SearchTracePanel({ result }: { result: SearchResult }) {
                       </td>
                       <td className="p-1 text-center">{q.status}</td>
                       <td className="p-1 text-center">{q.resultCount}</td>
+                      <td className="p-1 text-center">{q.pricedCount}</td>
+                      <td className="p-1 text-center">{Math.round(q.durationMs)}</td>
                       <td className="p-1 text-center">{q.phase.replace("alternative:", "alt:")}</td>
                     </tr>
                   ))}

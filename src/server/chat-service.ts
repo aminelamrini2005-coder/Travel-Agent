@@ -23,16 +23,24 @@ export function summarize(result: SearchResult): string {
     return t("reply.empty", { reason: t(result.emptyReasonKey ?? "empty.noRoute") });
   }
   const top = result.journeys.find((j) => j.id === result.ranking[0]?.journeyId) ?? result.journeys[0]!;
+  const price =
+    top.unknownPriceSegments > 0
+      ? top.totalPrice.amountMinor > 0
+        ? `≥ ${formatMoney(top.totalPrice)} (+ prix inconnus)`
+        : t("price.unknownShort")
+      : formatMoney(top.totalPrice);
   const parts = [
     t("reply.summary", {
       count: result.journeys.length,
-      price: formatMoney(top.totalPrice),
+      price,
       duration: formatDuration(top.totalDurationMinutes),
       arrival: formatLocalTime(top.arrivalTime, top.segments[top.segments.length - 1]!.destination.timezone),
     }),
   ];
+  parts.push(t("reply.coverage", { percent: top.dataQuality.realCoveragePercent, verified: top.dataQuality.verifiedSegments, counted: top.dataQuality.countedSegments }));
   if (result.alternatives.length) parts.push(t("reply.alternatives", { count: result.alternatives.length }));
-  if (result.containsMockData) parts.push(t("reply.summaryMock"));
+  if (top.dataQuality.mockSegments > 0) parts.push(t("reply.summaryMock"));
+  else if (result.containsMockData) parts.push(t("reply.otherOptionsMock"));
   return parts.join(" ");
 }
 

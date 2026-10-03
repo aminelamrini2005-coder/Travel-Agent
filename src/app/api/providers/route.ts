@@ -12,8 +12,10 @@ export async function GET(req: Request) {
       isMock: p.isMock,
       modes: p.modes,
       cacheTtlSeconds: p.cacheTtlSeconds,
+      attribution: p.attribution,
       ...p.availability(),
     }));
-    return Response.json({ providers, declaredSources: DECLARED_SOURCES });
+    const integrations = getContainer().integrations.map(({ providers: ps, ...i }) => ({ ...i, providerIds: ps.map((p) => p.id) }));
+    return Response.json({ providers, integrations, declaredSources: DECLARED_SOURCES });
   });
 }

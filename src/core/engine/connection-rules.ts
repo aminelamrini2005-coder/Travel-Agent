@@ -38,6 +38,7 @@ export function requiredConnection(
   let minutes = rules.matrix[from][to];
 
   if (from === "RAIL" && to === "RAIL" && !separate) minutes = Math.min(minutes, rules.sameTicketRail);
+  if (from === "FLIGHT" && to === "FLIGHT" && !separate) minutes = Math.min(minutes, rules.sameTicketFlight);
   if (from === "FLIGHT" && ctx.luggage === "checked") {
     minutes += rules.checkedBaggageAfterFlight;
     notes.push("connection.note.baggageClaim");

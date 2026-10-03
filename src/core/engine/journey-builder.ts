@@ -1,6 +1,7 @@
 import { addMinutesIso, diffMinutes, toEpochMs } from "../time";
 import {
   MODE_CATEGORY,
+  type DataQuality,
   PRICE_CONFIDENCE_RANK,
   type Connection,
   type Journey,
@@ -48,6 +49,36 @@ export function alignLeadingFlexible(segments: TransportSegment[], ctx: Connecti
     }
   }
   return out;
+}
+
+/**
+ * Couverture en données réelles (déterministe) : chaque segment hors marche est classé
+ * vérifié (source réelle), fictif (mock) ou estimé (calcul). Pourcentage = vérifiés / comptés.
+ */
+export function computeDataQuality(segments: TransportSegment[]): DataQuality {
+  let verified = 0;
+  let mock = 0;
+  let estimated = 0;
+  let priced = 0;
+  for (const s of segments) {
+    if (s.mode === "walk") continue;
+    if (s.isMock || s.accessMethod === "MOCK") mock++;
+    else if (s.accessMethod === "COMPUTED") estimated++;
+    else verified++;
+    if (!s.isMock && s.price && (s.priceConfidence === "REAL" || s.priceConfidence === "RANGE")) priced++;
+  }
+  const counted = verified + mock + estimated;
+  const status: DataQuality["status"] =
+    counted === 0 ? "estimated" : mock === 0 && estimated === 0 ? "verified" : verified === 0 ? (mock > 0 ? "demo" : "estimated") : "partial";
+  return {
+    verifiedSegments: verified,
+    mockSegments: mock,
+    estimatedSegments: estimated,
+    countedSegments: counted,
+    realCoveragePercent: counted === 0 ? 0 : Math.round((100 * verified) / counted),
+    pricedSegments: priced,
+    status,
+  };
 }
 
 const RISK_ORDER: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2 };
@@ -129,6 +160,7 @@ export function buildJourney(rawSegments: TransportSegment[], ctx: ConnectionCon
     riskLevel: risk,
     bookingLinks: segments.filter((s) => s.bookingUrl).map((s) => ({ segmentId: s.id, url: s.bookingUrl!, provider: s.provider })),
     containsMockData: segments.some((s) => s.isMock),
+    dataQuality: computeDataQuality(segments),
     modes,
     sources,
     signature,

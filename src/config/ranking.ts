@@ -15,6 +15,8 @@ export interface RankingWeights {
   unknownPricePenalty: number;
   /** Pénalité pour un prix estimé (incertitude). */
   estimatedPricePenalty: number;
+  /** Pénalité par segment fictif : à qualité égale, une donnée réelle passe devant une donnée de démonstration. */
+  mockSegmentPenalty: number;
 }
 
 export const DEFAULT_RANKING_WEIGHTS: RankingWeights = {
@@ -24,8 +26,9 @@ export const DEFAULT_RANKING_WEIGHTS: RankingWeights = {
   walkToleranceMinutes: 20,
   waitPenaltyPerHour: 3,
   riskPenalty: 150,
-  unknownPricePenalty: 25,
+  unknownPricePenalty: 8,
   estimatedPricePenalty: 3,
+  mockSegmentPenalty: 12,
 };
 
 /** Seuils de pertinence des alternatives (cf. AlternativeEngine). */

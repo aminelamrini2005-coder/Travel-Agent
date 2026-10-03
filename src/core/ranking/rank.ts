@@ -14,7 +14,8 @@ export function bestScore(j: Journey, w: RankingWeights = DEFAULT_RANKING_WEIGHT
   const risk = (1 - j.reliabilityScore) * w.riskPenalty;
   const unknown = j.unknownPriceSegments * w.unknownPricePenalty;
   const estimated = j.totalPriceConfidence === "ESTIMATED" ? w.estimatedPricePenalty : 0;
-  return price + time + transfers + walk + wait + risk + unknown + estimated;
+  const mock = j.dataQuality.mockSegments * w.mockSegmentPenalty;
+  return price + time + transfers + walk + wait + risk + unknown + estimated + mock;
 }
 
 const byArrival = (a: Journey, b: Journey) => toEpochMs(a.arrivalTime) - toEpochMs(b.arrivalTime);
@@ -41,11 +42,21 @@ export function sortByProfile(journeys: Journey[], profile: RankingProfile, w: R
   }
 }
 
+/** Deux totaux ne sont comparables que si aucun segment n'a de prix inconnu (sinon : totaux partiels). */
+export const pricesComparable = (a: Journey, b: Journey) => a.unknownPriceSegments === 0 && b.unknownPriceSegments === 0;
+
 const minutesBetween = (a: string, b: string) => Math.round((toEpochMs(b) - toEpochMs(a)) / 60000);
 
 /** Explication calculée par le backend (clé i18n + valeurs) : jamais générée par le LLM. */
 function explain(profile: RankingProfile, j: Journey, cheapest: Journey, fastest: Journey, currency: string): Explanation {
   const base = { currency };
+  // Prix incomplets : on ne compare que ce qui est connu (horaires), jamais des totaux partiels.
+  const other = profile === "cheapest" ? fastest : cheapest;
+  if (profile !== "comfort" && j.id !== other.id && !pricesComparable(j, other)) {
+    const earlier = minutesBetween(j.arrivalTime, other.arrivalTime);
+    if (earlier > 0) return { key: "explain.priceIncomplete.earlier", params: { ...base, earlier } };
+    return { key: `explain.priceIncomplete.${profile}`, params: base };
+  }
   switch (profile) {
     case "best": {
       if (j.id === cheapest.id && j.id === fastest.id) return { key: "explain.best.dominant", params: base };
@@ -86,8 +97,13 @@ export function rankJourneys(journeys: Journey[], objective: RankingProfile, cur
   const cheapest = sortByProfile(journeys, "cheapest", w, vot)[0]!;
   const fastest = sortByProfile(journeys, "fastest", w, vot)[0]!;
   const profiles: RankingProfile[] = [objective, ...(["best", "cheapest", "fastest", "comfort"] as const).filter((p) => p !== objective)];
+  const unknownPriced = journeys.filter((j) => j.unknownPriceSegments > 0).length;
   const entries: RankedEntry[] = profiles.map((profile) => {
     const top = sortByProfile(journeys, profile, w, vot)[0]!;
+    // « Le moins cher » parmi des trajets dont certains n'ont pas de prix : on le dit explicitement.
+    if (profile === "cheapest" && top.unknownPriceSegments === 0 && unknownPriced > 0) {
+      return { profile, journeyId: top.id, explanation: { key: "explain.cheapest.amongPriced", params: { currency, n: unknownPriced } } };
+    }
     return { profile, journeyId: top.id, explanation: explain(profile, top, cheapest, fastest, currency) };
   });
   return { entries, ordered: sortByProfile(journeys, objective, w, vot) };

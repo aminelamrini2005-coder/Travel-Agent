@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Alternative } from "@/core/types";
 import { t } from "@/i18n";
+import { DataQualityBar } from "./DataBadges";
 import { PlaceChain } from "./JourneyCard";
 import { JourneyTimeline } from "./JourneyTimeline";
 import { depTime, formatDuration, journeyArrival, journeyPrice, signed, signedDuration } from "./format";
@@ -23,7 +24,8 @@ export function AlternativeCard({ alt, index }: { alt: Alternative; index: numbe
           </div>
           {alt.referenceJourneyId && (
             <div className="text-xs text-zinc-600 dark:text-zinc-400">
-              {signed(alt.deltaPrice.amountMinor, alt.deltaPrice.currency)} · {t("result.arrival", { time: signedDuration(alt.deltaArrivalMinutes) })}
+              {alt.priceDeltaKnown ? `${signed(alt.deltaPrice.amountMinor, alt.deltaPrice.currency)} · ` : ""}
+              {t("result.arrival", { time: signedDuration(alt.deltaArrivalMinutes) })}
             </div>
           )}
         </div>
@@ -37,7 +39,7 @@ export function AlternativeCard({ alt, index }: { alt: Alternative; index: numbe
           ))}
         </div>
       )}
-      {j.containsMockData && <span className="mt-1 inline-block rounded bg-amber-200 px-1.5 text-xs font-semibold text-amber-900">{t("mock.badge")}</span>}
+      <DataQualityBar q={j.dataQuality} />
       <PlaceChain journey={j} />
       <button type="button" onClick={() => setOpen((o) => !o)} className="mt-3 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400">
         {open ? t("result.hideDetail") : t("result.seeDetail")}

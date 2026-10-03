@@ -33,10 +33,20 @@ export function journeyArrival(j: Journey): string {
   return `${arrTime(last)}${off > 0 ? ` (+${off})` : ""}`;
 }
 
+/** Prix total affiché : jamais de total « complet » si un segment a un prix inconnu. */
 export function journeyPrice(j: Journey): string {
-  const base = formatMoney(j.totalPrice);
+  if (j.unknownPriceSegments > 0) {
+    return j.totalPrice.amountMinor > 0 ? `≥ ${formatMoney(j.totalPrice)} + ?` : t("price.unknownShort");
+  }
   const approx = j.totalPriceConfidence === "ESTIMATED" || j.totalPriceConfidence === "RANGE" ? "≈ " : "";
-  return `${approx}${base}${j.unknownPriceSegments > 0 ? " +?" : ""}`;
+  return `${approx}${formatMoney(j.totalPrice)}`;
+}
+
+export type SegmentKind = "REAL_DATA" | "MOCK" | "ESTIMATED";
+export function segmentKind(s: TransportSegment): SegmentKind {
+  if (s.isMock || s.accessMethod === "MOCK") return "MOCK";
+  if (s.accessMethod === "COMPUTED") return "ESTIMATED";
+  return "REAL_DATA";
 }
 
 export function signed(minor: number, currency: string): string {

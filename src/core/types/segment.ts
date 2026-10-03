@@ -35,6 +35,13 @@ export const TransportSegmentSchema = z.object({
   isMock: z.boolean(),
   /** Instant de récupération auprès de la source (UTC). */
   checkedAt: IsoInstantSchema,
+  /**
+   * Fraîcheur de la donnée source : date de publication / téléchargement du jeu de données
+   * (GTFS) ou instant de la réponse (API temps réel). Distinct de `checkedAt` pour l'open data.
+   */
+  dataAsOf: IsoInstantSchema.optional(),
+  /** Mention de source / licence à afficher (ex. « FlixBus GTFS — ODbL »). */
+  attribution: z.string().optional(),
   /** Segments partageant ce groupe sont vendus sur un même billet (correspondance protégée). */
   ticketGroupId: z.string().optional(),
   serviceNumber: z.string().optional(),

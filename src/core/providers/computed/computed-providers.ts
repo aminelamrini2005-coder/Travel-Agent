@@ -4,7 +4,7 @@
  */
 import { haversineKm, sameLandmass } from "../../location/geo";
 import { addMinutesIso } from "../../time";
-import type { TransportSegment } from "../../types";
+import type { Place, TransportSegment } from "../../types";
 import type { ProviderAvailability, ProviderContext, SegmentQuery, TransportProvider } from "../types";
 
 abstract class ComputedProvider implements TransportProvider {
@@ -24,6 +24,32 @@ abstract class ComputedProvider implements TransportProvider {
   abstract search(q: SegmentQuery, ctx: ProviderContext): Promise<TransportSegment[]>;
 }
 
+/** Segment de marche estimé (durée = distance × 1,3 / 4,5 km/h). Partagé par WalkProvider et les liaisons piétonnes. */
+export function makeWalkSegment(from: Place, to: Place, startIso: string, currency: string, checkedAt: string): TransportSegment {
+  const km = haversineKm(from, to) * 1.3;
+  const minutes = Math.max(1, Math.round((km / 4.5) * 60));
+  return {
+    id: `walk:${from.id}>${to.id}`,
+    provider: "walk",
+    accessMethod: "COMPUTED",
+    mode: "walk",
+    origin: from,
+    destination: to,
+    departureTime: startIso,
+    arrivalTime: addMinutesIso(startIso, minutes),
+    flexibleDeparture: true,
+    durationMinutes: minutes,
+    price: { amountMinor: 0, currency },
+    priceConfidence: "REAL",
+    bookingUrl: null,
+    realtime: false,
+    availability: "available",
+    isMock: false,
+    checkedAt,
+    notes: ["segment.note.walkEstimate"],
+  };
+}
+
 export class WalkProvider extends ComputedProvider {
   readonly id = "walk";
   readonly displayName = "Marche (estimation)";
@@ -38,30 +64,7 @@ export class WalkProvider extends ComputedProvider {
   }
 
   async search(q: SegmentQuery, ctx: ProviderContext): Promise<TransportSegment[]> {
-    const km = haversineKm(q.origin, q.destination) * 1.3;
-    const minutes = Math.max(1, Math.round((km / 4.5) * 60));
-    return [
-      {
-        id: `walk:${q.origin.id}>${q.destination.id}`,
-        provider: this.id,
-        accessMethod: "COMPUTED",
-        mode: "walk",
-        origin: q.origin,
-        destination: q.destination,
-        departureTime: q.windowStart,
-        arrivalTime: addMinutesIso(q.windowStart, minutes),
-        flexibleDeparture: true,
-        durationMinutes: minutes,
-        price: { amountMinor: 0, currency: q.currency },
-        priceConfidence: "REAL",
-        bookingUrl: null,
-        realtime: false,
-        availability: "available",
-        isMock: false,
-        checkedAt: ctx.now().toISOString(),
-        notes: ["segment.note.walkEstimate"],
-      },
-    ];
+    return [makeWalkSegment(q.origin, q.destination, q.windowStart, q.currency, ctx.now().toISOString())];
   }
 }
 
