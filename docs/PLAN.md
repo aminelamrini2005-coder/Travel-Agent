@@ -1,7 +1,22 @@
 # Travel Agent AI — Analyse, architecture et plan d'implémentation
 
-> Statut : **proposition à valider**. Aucun code applicatif n'est écrit avant validation.
+> Statut : **validé** (points 1 à 4), avec l'amendement A ci-dessous. Phase 1 en cours.
 > Date de l'analyse : 3 octobre 2026.
+
+---
+
+## Amendement A (validé) — accès multi-méthodes aux sources
+
+- **Objectif** : maximiser le nombre de sources réellement consultables. Pour chaque plateforme, l'ordre de priorité est :
+  1. API officielle ;
+  2. open data, flux officiel ou API partenaire ;
+  3. `BrowserProvider` sur la session personnelle de l'utilisateur, **seulement** si c'est techniquement possible **et** autorisé par les CGU.
+- Chaque provider déclare un `accessMethod` : `API` | `OPEN_DATA` | `BROWSER` | `COMPUTED` (estimations calculées : marche, taxi) | `MOCK`.
+- La `SearchTrace` distingue ces méthodes, pour chaque provider et pour chaque requête.
+- Les BrowserProviders sont **désactivés par défaut**. Ils exigent une fiche `tosReview` valide, un opt-in dans `.env`, un profil de navigateur **hors du repository**, et ne contournent jamais de CAPTCHA, d'anti-bot ni de rate limit. Les données récupérées gardent `source`, `checkedAt` et `sourceUrl`.
+- Niveaux de confiance du prix : **`REAL` | `RANGE` | `ESTIMATED` | `UNKNOWN`**. Ils remplacent quoted / range / estimate / unknown utilisés plus bas dans ce document.
+- Architecture i18n dès la phase 1 : toutes les chaînes de l'interface et toutes les explications passent par un catalogue de messages (`fr` d'abord).
+- Étude détaillée par plateforme : voir [`PROVIDER_ACCESS_STUDY.md`](./PROVIDER_ACCESS_STUDY.md).
 
 ---
 

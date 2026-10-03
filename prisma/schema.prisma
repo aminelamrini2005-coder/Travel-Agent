@@ -1,0 +1,80 @@
+// Schéma de persistance (PostgreSQL).
+// Les résultats de recherche sont stockés en JSON : ce sont des instantanés horodatés (checkedAt),
+// jamais ré-affichés comme des données fraîches.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String           @id @default(uuid())
+  createdAt    DateTime         @default(now())
+  preferences  UserPreferences?
+  conversations Conversation[]
+}
+
+model UserPreferences {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data      Json
+  updatedAt DateTime @updatedAt
+}
+
+model Conversation {
+  id            String    @id @default(uuid())
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Paramètres de recherche courants (éventuellement partiels).
+  currentParams Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  messages      Message[]
+  searches      Search[]
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  searchId       String?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Search {
+  id             String        @id
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  params         Json
+  result         Json
+  containsMock   Boolean
+  journeyCount   Int
+  createdAt      DateTime      @default(now())
+  providerCalls  ProviderCallLog[]
+
+  @@index([createdAt])
+}
+
+/// Observabilité : un enregistrement par appel provider, sans donnée personnelle.
+model ProviderCallLog {
+  id           String   @id @default(uuid())
+  searchId     String
+  search       Search   @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  providerId   String
+  accessMethod String
+  status       String
+  durationMs   Int
+  resultCount  Int
+  phase        String
+  createdAt    DateTime @default(now())
+
+  @@index([providerId, createdAt])
+}
