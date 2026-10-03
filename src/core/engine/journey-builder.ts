@@ -60,11 +60,16 @@ export function computeDataQuality(segments: TransportSegment[]): DataQuality {
   let mock = 0;
   let estimated = 0;
   let priced = 0;
+  const uncoveredLegs: DataQuality["uncoveredLegs"] = [];
   for (const s of segments) {
     if (s.mode === "walk") continue;
-    if (s.isMock || s.accessMethod === "MOCK") mock++;
-    else if (s.accessMethod === "COMPUTED") estimated++;
-    else verified++;
+    if (s.isMock || s.accessMethod === "MOCK") {
+      mock++;
+      uncoveredLegs.push({ from: s.origin.name, to: s.destination.name, mode: s.mode, kind: "mock" });
+    } else if (s.accessMethod === "COMPUTED") {
+      estimated++;
+      uncoveredLegs.push({ from: s.origin.name, to: s.destination.name, mode: s.mode, kind: "estimated" });
+    } else verified++;
     if (!s.isMock && s.price && (s.priceConfidence === "REAL" || s.priceConfidence === "RANGE")) priced++;
   }
   const counted = verified + mock + estimated;
@@ -78,6 +83,7 @@ export function computeDataQuality(segments: TransportSegment[]): DataQuality {
     realCoveragePercent: counted === 0 ? 0 : Math.round((100 * verified) / counted),
     pricedSegments: priced,
     status,
+    uncoveredLegs,
   };
 }
 

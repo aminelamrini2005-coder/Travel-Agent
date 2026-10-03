@@ -16,6 +16,12 @@ export function PlaceChain({ journey }: { journey: Journey }) {
             ↓ {MODE_ICON[s.mode]} {modeLabel(s.mode)}
             {s.operator ? ` · ${s.operator}` : ""}
             {s.mode !== "walk" && <SegmentBadge segment={s} />}
+            {s.mode !== "walk" && s.accessMethod === "OPEN_DATA" && !s.realtime && (
+              <span className="ml-1 text-[10px] text-zinc-500">
+                {t("result.notRealtime")}
+                {s.dataAsOf ? ` · ${t("result.dataAsOf", { date: new Date(s.dataAsOf).toLocaleDateString("fr-FR") })}` : ""}
+              </span>
+            )}
           </div>
           <div className="font-medium">{s.destination.name}</div>
         </li>

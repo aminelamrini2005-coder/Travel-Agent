@@ -38,6 +38,11 @@ export interface DataQuality {
   /** Segments dont le prix provient d'une source (REAL ou RANGE). */
   pricedSegments: number;
   status: "verified" | "partial" | "demo" | "estimated";
+  /**
+   * Portions du trajet SANS source réelle (données de démonstration ou estimation calculée),
+   * listées pour être affichées explicitement : le reste du trajet reste calculé et affiché.
+   */
+  uncoveredLegs: { from: string; to: string; mode: TransportMode; kind: "mock" | "estimated" }[];
 }
 
 export interface Journey {

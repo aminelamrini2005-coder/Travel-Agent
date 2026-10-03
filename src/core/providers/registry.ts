@@ -226,7 +226,13 @@ export class ProviderRegistry {
         invalid++;
         continue;
       }
-      const s: TransportSegment = { ...parsed.data, provider: provider.id, accessMethod: provider.accessMethod, isMock: provider.isMock || parsed.data.isMock };
+      const s: TransportSegment = {
+        ...parsed.data,
+        provider: provider.id,
+        accessMethod: provider.accessMethod,
+        isMock: provider.isMock || parsed.data.isMock,
+        realtime: provider.realtimeCapable === true && parsed.data.realtime,
+      };
       if (!query.modes.includes(s.mode)) continue;
       if (toEpochMs(s.arrivalTime) < toEpochMs(s.departureTime)) {
         invalid++;

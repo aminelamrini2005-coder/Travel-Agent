@@ -71,6 +71,7 @@ export class TransitousProvider implements TransportProvider {
   readonly attribution = "Transitous (transitous.org) — sources : https://transitous.org/sources/";
   readonly modes: TransportMode[] = ["bus", "coach", "tram", "metro", "ferry", "train", "regional_train", "high_speed_train"];
   readonly cacheTtlSeconds = 3600;
+  readonly realtimeCapable = true;
   readonly timeoutMs = 15_000;
   readonly maxConcurrency = 1;
   readonly maxCallsPerSearch: number;

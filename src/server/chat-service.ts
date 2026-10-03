@@ -39,6 +39,8 @@ export function summarize(result: SearchResult): string {
   ];
   parts.push(t("reply.coverage", { percent: top.dataQuality.realCoveragePercent, verified: top.dataQuality.verifiedSegments, counted: top.dataQuality.countedSegments }));
   if (result.alternatives.length) parts.push(t("reply.alternatives", { count: result.alternatives.length }));
+  const gaps = top.dataQuality.uncoveredLegs.filter((l) => l.kind === "mock");
+  if (gaps.length) parts.push(t("reply.uncovered", { legs: gaps.map((l) => `${l.from} → ${l.to} (${t(`mode.${l.mode}`)})`).join(" ; ") }));
   if (top.dataQuality.mockSegments > 0) parts.push(t("reply.summaryMock"));
   else if (result.containsMockData) parts.push(t("reply.otherOptionsMock"));
   return parts.join(" ");

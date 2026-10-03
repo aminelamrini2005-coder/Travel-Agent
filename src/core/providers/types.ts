@@ -44,6 +44,11 @@ export interface TransportProvider {
   readonly isMock: boolean;
   /** Mention de source / licence (affichée dans la trace). */
   readonly attribution?: string;
+  /**
+   * La source peut-elle fournir du temps réel ? Si non (GTFS, mocks, estimations), le registre force
+   * `realtime: false` sur tous ses segments, quoi qu'en dise la source : un GTFS reste un horaire théorique.
+   */
+  readonly realtimeCapable?: boolean;
   /** Durée de cache des résultats (s). 0 = pas de cache. */
   readonly cacheTtlSeconds: number;
   readonly timeoutMs: number;

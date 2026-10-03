@@ -77,7 +77,16 @@ describe("couverture en données réelles (déterministe)", () => {
 
   it("2/3 segments vérifiés = 67 %, 1 segment de démonstration, la marche n'est pas comptée", () => {
     const q2 = computeDataQuality([real1, fake, walk, real2]);
-    expect(q2).toEqual({ verifiedSegments: 2, mockSegments: 1, estimatedSegments: 0, countedSegments: 3, realCoveragePercent: 67, pricedSegments: 0, status: "partial" });
+    expect(q2).toEqual({
+      verifiedSegments: 2,
+      mockSegments: 1,
+      estimatedSegments: 0,
+      countedSegments: 3,
+      realCoveragePercent: 67,
+      pricedSegments: 0,
+      status: "partial",
+      uncoveredLegs: [{ from: "P", to: "B", mode: "flight", kind: "mock" }],
+    });
     expect(t("quality.coverage", { percent: q2.realCoveragePercent })).toBe("Données réelles : 67 %");
   });
 

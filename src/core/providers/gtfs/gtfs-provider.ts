@@ -25,6 +25,8 @@ const ymd = (iso: string) => Number(iso.replaceAll("-", ""));
 export class GtfsProvider implements TransportProvider {
   readonly accessMethod = "OPEN_DATA" as const;
   readonly isMock = false;
+  /** Un GTFS est TOUJOURS un horaire théorique, même valide à la date recherchée. */
+  readonly realtimeCapable = false;
   readonly cacheTtlSeconds = 0; // calcul local, pas de cache nécessaire
   readonly timeoutMs = 20_000; // le premier appel charge le flux en mémoire
   readonly maxCallsPerSearch = 2000;

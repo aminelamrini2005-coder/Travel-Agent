@@ -85,6 +85,7 @@ export class SncfProvider implements TransportProvider {
   readonly attribution = "Données SNCF — api.sncf.com (Navitia)";
   readonly modes: TransportMode[] = ["train", "regional_train", "high_speed_train", "coach"];
   readonly cacheTtlSeconds = 900;
+  readonly realtimeCapable = true;
   readonly timeoutMs = 12_000;
   readonly maxCallsPerSearch = 15;
   readonly maxConcurrency = 4;

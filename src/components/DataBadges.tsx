@@ -51,6 +51,15 @@ export function DataQualityBar({ q }: { q: DataQuality }) {
         <div className="h-full bg-emerald-600" style={{ width: `${q.realCoveragePercent}%` }} />
       </div>
       <div className="mt-1">{parts.join(" · ")}</div>
+      {q.uncoveredLegs.length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {q.uncoveredLegs.map((l, i) => (
+            <li key={i}>
+              • {t(`quality.uncovered.${l.kind}`, { from: l.from, to: l.to, mode: t(`mode.${l.mode}`) })}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildGtfsIndex, parseCsv, serviceActive, stopsNear } from "@/core/providers/gtfs/gtfs-index";
 import { GtfsProvider } from "@/core/providers/gtfs/gtfs-provider";
 import type { GtfsFeedConfig } from "@/core/providers/gtfs/feeds";
-import type { SegmentQuery } from "@/core/providers/types";
+import type { SegmentQuery, TransportProvider } from "@/core/providers/types";
 import { place, silentLogger } from "./helpers";
 
 /** Mini-flux GTFS synthétique : A (Palma) → B → C (Manacor), un voyage après minuit, une montée interdite. */
@@ -112,5 +112,61 @@ describe("GtfsProvider (OpenDataProvider)", () => {
   it("désactivé si le flux n'est pas téléchargé (jamais de données inventées)", () => {
     const p = new GtfsProvider(feed, null);
     expect(p.availability()).toEqual({ enabled: false, reasonKey: "provider.disabled.feedNotDownloaded" });
+  });
+});
+
+describe("synchronisation GTFS : source officielle prioritaire", () => {
+  const zip = new Uint8Array([0x50, 0x4b, 3, 4, 0, 0]);
+  const feedWithMirror = { ...feed, mirrorUrl: "https://storage.googleapis.com/storage/v1/b/mdb-latest/o/x.zip?alt=media" };
+
+  it("utilise l'URL officielle dès qu'elle répond, sans interroger le miroir", async () => {
+    const { downloadFeed } = await import("@/core/providers/gtfs/gtfs-sync");
+    const urls: string[] = [];
+    const f = (async (u: string) => (urls.push(u), new Response(zip, { headers: { "last-modified": "Mon, 28 Sep 2026 10:00:00 GMT" } }))) as unknown as typeof fetch;
+    const r = await downloadFeed(feedWithMirror, f);
+    expect(r?.sourceKind).toBe("official");
+    expect(r?.sourceUpdatedAt).toBe("2026-09-28T10:00:00.000Z");
+    expect(urls).toEqual([feed.officialUrl]);
+  });
+
+  it("ne se replie sur la copie Mobility Database que si l'officielle est injoignable", async () => {
+    const { downloadFeed } = await import("@/core/providers/gtfs/gtfs-sync");
+    const f = (async (u: string) => {
+      if (u === feed.officialUrl) return new Response("", { status: 403 });
+      if (u.endsWith("?alt=media")) return new Response(zip);
+      return new Response(JSON.stringify({ updated: "2026-06-04T01:15:05.830Z" }));
+    }) as unknown as typeof fetch;
+    const r = await downloadFeed(feedWithMirror, f);
+    expect(r?.sourceKind).toBe("mirror");
+    expect(r?.sourceUpdatedAt).toBe("2026-06-04T01:15:05.830Z");
+  });
+
+  it("refuse une réponse qui n'est pas un ZIP (page d'erreur, portail captif…)", async () => {
+    const { downloadFeed } = await import("@/core/providers/gtfs/gtfs-sync");
+    const f = (async () => new Response("<html>login</html>")) as unknown as typeof fetch;
+    expect(await downloadFeed(feed, f)).toBeNull();
+  });
+
+  it("le registre force realtime=false pour un GTFS (horaire théorique)", async () => {
+    const { ProviderRegistry } = await import("@/core/providers/registry");
+    const real = await provider.search(q("2026-10-16T14:00:00Z", "2026-10-16T20:00:00Z"), ctx);
+    const lying: TransportProvider = {
+      id: provider.id,
+      displayName: provider.displayName,
+      accessMethod: "OPEN_DATA",
+      modes: provider.modes,
+      isMock: false,
+      realtimeCapable: false,
+      cacheTtlSeconds: 0,
+      timeoutMs: 1000,
+      maxCallsPerSearch: 10,
+      maxConcurrency: 1,
+      availability: () => ({ enabled: true }),
+      supports: () => true,
+      search: async () => real.map((s) => ({ ...s, realtime: true })), // une source qui prétendrait au temps réel
+    };
+    const out = await new ProviderRegistry([lying]).execute([q("2026-10-16T14:00:00Z", "2026-10-16T20:00:00Z")], { phase: "primary", logger: silentLogger });
+    expect(out.segments.length).toBeGreaterThan(0);
+    expect(out.segments.every((s) => s.realtime === false)).toBe(true);
   });
 });
